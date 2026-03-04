@@ -205,6 +205,7 @@ def build_epmc_query_with_and_or(sections: List[str],
 def epmc_cursor_paged_query(query: str,
                             annotation_column: str,
                             annotation_value: str,
+                            debug_query: bool,
                             full_cache: bool,
                             verbose: bool) -> Tuple[List[str], Dict]:
 
@@ -227,6 +228,9 @@ def epmc_cursor_paged_query(query: str,
         }
 
         try:
+            if debug_query:
+                prepared = requests.Request("GET", SEARCH_URL, params=params).prepare()
+                print(f"[DEBUG EPMC URL] {prepared.url}")
             r = requests.get(SEARCH_URL, params=params, timeout=20)
             data = r.json()
         except Exception as e:
@@ -271,6 +275,43 @@ def robust_csv_search(client, query, fields, retries=5, delay=5, verbose=False):
                 print(f"[EMDB] ERROR: Failed after {retries} attempts")
                 raise
             print(f"[EMDB] Warning: {e} — retrying in {delay}s")
+            time.sleep(delay)
+            attempt += 1
+
+
+def robust_http_csv_search(query, fields, retries=5, delay=5, verbose=False,
+                           debug_query=False,
+                           emdb_api_base="https://www.ebi.ac.uk/emdb/api"):
+    """Direct HTTP equivalent of EMDB().csv_search()."""
+    from io import StringIO
+
+    attempt = 1
+    while True:
+        try:
+            if verbose:
+                print(f"[EMDB HTTP] Attempt {attempt}/{retries}: GET /search/<query>")
+
+            endpoint = f"{emdb_api_base.rstrip('/')}/search/{query}"
+            params = {
+                "rows": 1000000,
+                "wt": "csv",
+                "download": "false"
+            }
+            if fields:
+                params["fl"] = fields
+
+            if debug_query:
+                prepared = requests.Request("GET", endpoint, params=params).prepare()
+                print(f"[DEBUG EMDB HTTP URL] {prepared.url}")
+
+            response = requests.get(endpoint, params=params, timeout=20)
+            response.raise_for_status()
+            return pd.read_csv(StringIO(response.text.strip()))
+        except Exception as e:
+            if attempt >= retries:
+                print(f"[EMDB HTTP] ERROR: Failed after {retries} attempts")
+                raise
+            print(f"[EMDB HTTP] Warning: {e} — retrying in {delay}s")
             time.sleep(delay)
             attempt += 1
 
@@ -382,6 +423,7 @@ def run_multi_epmc_annotations(df: pd.DataFrame,
         else:
             doi_hits, full_pages = epmc_cursor_paged_query(
                 epmc_query, annotation_column, annotation_value,
+                debug_query,
                 full_cache, verbose
             )
 
@@ -438,6 +480,18 @@ def get_args():
 
     parser.add_argument("--epmc_query_csv", type=str)
     parser.add_argument("--full_cache", action="store_true")
+    parser.add_argument(
+        "--emdb_source",
+        choices=["client", "http"],
+        default="http",
+        help="How to query EMDB: Python client (client) or direct HTTP endpoint (http)."
+    )
+    parser.add_argument(
+        "--emdb_api_base",
+        type=str,
+        default="https://www.ebi.ac.uk/emdb/api",
+        help="Base URL for EMDB API when --emdb_source http is used."
+    )
 
     return parser.parse_args()
 
@@ -467,12 +521,19 @@ def main():
     if args.debug_query:
         print(f"[DEBUG EMDB QUERY] {query}\n")
 
-    client = EMDB()
-
-    df = robust_csv_search(
-        client, query, args.fields,
-        retries=5, delay=5, verbose=args.verbose
-    )
+    if args.emdb_source == "client":
+        client = EMDB()
+        df = robust_csv_search(
+            client, query, args.fields,
+            retries=5, delay=5, verbose=args.verbose
+        )
+    else:
+        df = robust_http_csv_search(
+            query, args.fields,
+            retries=5, delay=5, verbose=args.verbose,
+            debug_query=args.debug_query,
+            emdb_api_base=args.emdb_api_base
+        )
 
     print(f"[EMDB] Retrieved {len(df)} entries.\n")
 
@@ -507,6 +568,7 @@ def main():
         else:
             doi_hits, full_pages = epmc_cursor_paged_query(
                 epmc_query, annotation_column, annotation_value,
+                args.debug_query,
                 args.full_cache, args.verbose
             )
 

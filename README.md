@@ -17,6 +17,9 @@ Typical use cases include:
 ## Features
 
 - Query EMDB using **Solr-style filters**
+- Choose EMDB source:
+  - Python client (`--emdb_source client`, default)
+  - direct EMDB HTTP API (`--emdb_source http`)
 - Retrieve EMDB entries as DataFrame and CSV
 
 - Query Europe PMC for entry labeling:
@@ -60,6 +63,21 @@ This will produce:
 ```
 emdb_results.csv
 ```
+
+### Query EMDB using direct HTTP endpoint (without `EMDB().csv_search()`)
+
+```bash
+./emdb.client.epmc_annotation_search.py \
+  --emdb_source http \
+  --method '*' \
+  --status REL \
+  --fields emdb_id,xref_DOI,current_status,institution_name,country_name \
+  --output emdb_results_http
+```
+
+Optional:
+
+- `--emdb_api_base https://www.ebi.ac.uk/emdb/api` (defaults to this)
 
 ---
 
