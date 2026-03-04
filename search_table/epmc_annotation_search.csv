@@ -1,3 +1,4 @@
 annotation_column,annotation,section,string_OR,string_AND
 Facility,eBIC,"METHODS,SUPPL,ACK_FUND","electron Bio-Imaging Centre, electron Bio-Imaging Center, electron BioImaging Center, electron BioImaging Centre, eBIC",diamond
 Modelling (auto),modelAngelo,METHODS,"modelAngelo, model angelo, Model Angelo",
+Modelling (predictive),AlphaFold,METHODS,"AlphaFold, Alpha Fold",
