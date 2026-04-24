@@ -394,6 +394,20 @@ def get_annotation_summary_columns(df: pd.DataFrame, args) -> List[str]:
     ]
 
 
+def build_analysis_description() -> str:
+    return (
+        "This report summarises rule-based annotations assigned to EMDB entries by "
+        "matching linked publication DOIs from EMDB against Europe PMC search results "
+        "using the configured key-phrase rules and publication sections. An annotation "
+        "indicates that keyword-based evidence was identified in at least one "
+        "publication linked to an EMDB entry. These data are therefore useful for "
+        "exploratory analysis, frequency summaries, and follow-up review. Caution is "
+        "advised in treating these annotations as definitive proof of method use, "
+        "facility use, software use, or experimental provenance, as results depend on "
+        "the EMDB query, DOI linkage, Europe PMC text availability, and the rule set used."
+    )
+
+
 # ============================================================================
 # Annotation Logic
 # ============================================================================
@@ -521,7 +535,11 @@ def get_args():
                         help="Basename for output CSV + summary.")
 
     parser.add_argument("--print", dest="print_df", action="store_true")
-    parser.add_argument("--summary", action="store_true")
+    parser.add_argument("--summary", dest="summary", action="store_true",
+                        help="Write summary outputs (default: on).")
+    parser.add_argument("--no-summary", dest="summary", action="store_false",
+                        help="Disable summary text and summary-count CSV outputs.")
+    parser.set_defaults(summary=True)
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--debug-query", action="store_true",
                         help="Print full query breakdown before executing.")
@@ -672,7 +690,11 @@ def main():
     # -----------------------------
     if args.summary:
         print("\n[Summary Report]\n")
-        summary_lines = []
+        summary_lines = [
+            "Analysis description:",
+            build_analysis_description(),
+            "",
+        ]
         summary_rows = []
 
         # Command used
