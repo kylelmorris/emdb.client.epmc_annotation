@@ -370,6 +370,30 @@ def ensure_required_fields(fields: str, required_fields: List[str]) -> str:
     return ",".join(parts)
 
 
+def get_annotation_summary_columns(df: pd.DataFrame, args) -> List[str]:
+    """Return annotation columns relevant to the chosen annotation mode."""
+    if args.epmc:
+        return [args.annotation_column] if args.annotation_column in df.columns else []
+
+    if args.epmc_query_csv:
+        rules = pd.read_csv(args.epmc_query_csv)
+        if "annotation_column" not in rules.columns:
+            return []
+        ordered = []
+        seen = set()
+        for col in rules["annotation_column"].tolist():
+            if col in df.columns and col not in seen:
+                ordered.append(col)
+                seen.add(col)
+        return ordered
+
+    ignore = {"emdb_id", "xref_DOI"}
+    return [
+        col for col in df.columns
+        if col not in ignore and df[col].dtype == object
+    ]
+
+
 # ============================================================================
 # Annotation Logic
 # ============================================================================
@@ -535,6 +559,7 @@ def main():
     basename = args.output.replace(".csv", "").strip()
     output_csv  = f"{basename}.csv"
     summary_txt = f"{basename}_summary.txt"
+    summary_counts_csv = f"{basename}_summary_counts.csv"
 
     if args.verbose:
         print("[Arguments]")
@@ -648,6 +673,7 @@ def main():
     if args.summary:
         print("\n[Summary Report]\n")
         summary_lines = []
+        summary_rows = []
 
         # Command used
         cmd = " ".join(sys.argv)
@@ -658,12 +684,7 @@ def main():
         print(f"  {cmd}\n")
 
         total = len(df)
-        ignore = {"emdb_id", "xref_DOI"}
-
-        annotation_cols = [
-            col for col in df.columns
-            if col not in ignore and df[col].dtype == object
-        ]
+        annotation_cols = get_annotation_summary_columns(df, args)
 
         for col in annotation_cols:
             series = df[col].fillna("").astype(str)
@@ -692,13 +713,24 @@ def main():
             for value, cnt in value_counts.items():
                 print(f"     - {value} ({cnt})")
                 summary_lines.append(f"     - {value} ({cnt})")
+                summary_rows.append({
+                    "annotation_column": col,
+                    "annotation_value": value,
+                    "count": int(cnt),
+                    "frequency": cnt / total if total else 0.0,
+                    "annotated_entries": int(n_annotated),
+                    "total_entries": int(total),
+                })
             print()
             summary_lines.append("")
 
         with open(summary_txt, "w") as f:
             f.write("\n".join(summary_lines))
 
+        pd.DataFrame(summary_rows).to_csv(summary_counts_csv, index=False)
+
         print(f"[Summary] Written to: {summary_txt}")
+        print(f"[Summary] Written CSV counts: {summary_counts_csv}")
 
 
 # ============================================================================
