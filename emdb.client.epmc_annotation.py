@@ -353,6 +353,23 @@ def build_query(method: str, status: str, filters: List[str]) -> str:
     return " AND ".join(clauses) if clauses else "*:*"
 
 
+def normalise_fields_arg(fields: str) -> str:
+    """Normalise a comma-separated --fields argument by trimming whitespace."""
+    parts = [part.strip() for part in fields.split(",")]
+    return ",".join(part for part in parts if part)
+
+
+def ensure_required_fields(fields: str, required_fields: List[str]) -> str:
+    """Append required fields once, preserving user-supplied order."""
+    parts = [part.strip() for part in fields.split(",") if part.strip()]
+    seen = {part for part in parts}
+    for field in required_fields:
+        if field not in seen:
+            parts.append(field)
+            seen.add(field)
+    return ",".join(parts)
+
+
 # ============================================================================
 # Annotation Logic
 # ============================================================================
@@ -366,6 +383,12 @@ def annotate_with_multiple_matches(df: pd.DataFrame,
     doi_set = set(doi_hits)
     tag = f"{annotation_column}|{annotation_value}"
     print(f"[EPMC:{tag}] Annotating...")
+
+    if doi_col not in df.columns:
+        raise ValueError(
+            f"EPMC annotation requires a '{doi_col}' column in the EMDB results. "
+            f"Include it in --fields or let the script auto-add it."
+        )
 
     if annotation_column not in df.columns:
         df[annotation_column] = ""
@@ -518,6 +541,10 @@ def main():
         for k, v in vars(args).items():
             print(f"  {k}: {v}")
         print()
+
+    args.fields = normalise_fields_arg(args.fields)
+    if args.epmc or args.epmc_query_csv:
+        args.fields = ensure_required_fields(args.fields, ["xref_DOI"])
 
     # -----------------------------
     # Build EMDB query
