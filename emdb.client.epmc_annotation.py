@@ -152,7 +152,13 @@ def build_epmc_query_with_and_or(sections: List[str],
                                  debug=False,
                                  tag="") -> str:
     """
-    Correct AND/OR logic + parentheses for AND-block.
+    Build an EPMC query with OR-group AND OR-group semantics.
+
+    string_OR semantics:
+        any of these terms may satisfy the primary concept
+
+    string_AND semantics:
+        at least one of these terms must also be present
 
     Final structure:
         (OR block) AND ( OR of AND-groups )

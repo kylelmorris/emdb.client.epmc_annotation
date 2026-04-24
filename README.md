@@ -110,6 +110,11 @@ Annotate entries where publications mention a term in a specific section:
 
 To label entries with multiple annotations based on key phrase matching in publications, search for more than one key phrase at the same time by providing a formatted csv as follows:
 
+Rule semantics:
+
+- `string_OR`: any of these terms may satisfy the primary concept
+- `string_AND`: at least one of these terms must also be present
+
 Example CSV:
 
 ```example.csv
