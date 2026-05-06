@@ -812,7 +812,7 @@ def main():
                     "annotation_column": col,
                     "annotation_value": value,
                     "entry_count": int(cnt),
-                    "frequency": cnt / total if total else 0.0,
+                    "frequency": f"{cnt / total if total else 0.0:.6f}",
                     "annotated_entries": int(n_annotated),
                     "total_entries": int(total),
                 }
