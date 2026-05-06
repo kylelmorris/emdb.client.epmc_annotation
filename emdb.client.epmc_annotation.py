@@ -186,6 +186,14 @@ def extract_dois(value) -> List[str]:
     return cleaned
 
 
+def count_unique_dois(series: pd.Series) -> int:
+    """Count unique normalised DOI values from an xref_DOI-like Series."""
+    dois = set()
+    for raw in series:
+        dois.update(extract_dois(raw))
+    return len(dois)
+
+
 # ============================================================================
 # Europe PMC Query Builder (with parentheses fix)
 # ============================================================================
@@ -583,6 +591,14 @@ def get_args():
     parser.add_argument("--no-summary", dest="summary", action="store_false",
                         help="Disable summary text and summary-count CSV outputs.")
     parser.set_defaults(summary=True)
+    parser.add_argument(
+        "--publications",
+        action="store_true",
+        help=(
+            "Add publication_count, annotated_publications, and total_publications "
+            "to the summary-count CSV using DOI values from the main output xref_DOI column."
+        )
+    )
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--debug-query", action="store_true",
                         help="Print full query breakdown before executing.")
@@ -629,7 +645,7 @@ def main():
         print()
 
     args.fields = normalise_fields_arg(args.fields)
-    if args.epmc or args.epmc_query_csv:
+    if args.epmc or args.epmc_query_csv or args.publications:
         args.fields = ensure_required_fields(args.fields, ["xref_DOI"])
     if args.epmc_query_csv:
         read_epmc_query_csv(args.epmc_query_csv, verbose=args.verbose)
@@ -752,11 +768,23 @@ def main():
 
         total = len(df)
         annotation_cols = get_annotation_summary_columns(df, args)
+        if args.publications and "xref_DOI" not in df.columns:
+            raise ValueError(
+                "--publications requires an xref_DOI column. The script should "
+                "auto-add it to --fields; check the EMDB response includes xref_DOI."
+            )
+        total_publications = (
+            count_unique_dois(df["xref_DOI"]) if args.publications else None
+        )
 
         for col in annotation_cols:
             series = df[col].fillna("").astype(str)
             annotated_mask = series.str.strip().ne("")
             n_annotated = annotated_mask.sum()
+            annotated_publications = (
+                count_unique_dois(df.loc[annotated_mask, "xref_DOI"])
+                if args.publications else None
+            )
 
             print(f"Column: {col}")
             print(f"  Annotated entries: {n_annotated} / {total}")
@@ -780,14 +808,24 @@ def main():
             for value, cnt in value_counts.items():
                 print(f"     - {value} ({cnt})")
                 summary_lines.append(f"     - {value} ({cnt})")
-                summary_rows.append({
+                row = {
                     "annotation_column": col,
                     "annotation_value": value,
-                    "count": int(cnt),
+                    "entry_count": int(cnt),
                     "frequency": cnt / total if total else 0.0,
                     "annotated_entries": int(n_annotated),
                     "total_entries": int(total),
-                })
+                }
+                if args.publications:
+                    value_mask = series.eq(value)
+                    row.update({
+                        "publication_count": count_unique_dois(
+                            df.loc[value_mask, "xref_DOI"]
+                        ),
+                        "annotated_publications": int(annotated_publications),
+                        "total_publications": int(total_publications),
+                    })
+                summary_rows.append(row)
             print()
             summary_lines.append("")
 
