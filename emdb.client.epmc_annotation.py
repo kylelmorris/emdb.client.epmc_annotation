@@ -24,6 +24,7 @@ import re
 import sys
 import time
 import os
+import shutil
 from typing import List, Dict, Tuple
 
 import pandas as pd
@@ -99,6 +100,48 @@ def clean_terms(value) -> List[str]:
     if text.lower() in ("", "nan", "none"):
         return []
     return [p.strip() for p in text.split(",") if p.strip() and p.lower() not in ("nan", "none")]
+
+
+# ============================================================================
+# CSV Encoding Helpers
+# ============================================================================
+def read_epmc_query_csv(csv_path: str, verbose: bool = False) -> pd.DataFrame:
+    """Read an EPMC query CSV, converting common legacy encodings to UTF-8."""
+    try:
+        return pd.read_csv(csv_path, encoding="utf-8")
+    except UnicodeDecodeError as utf8_error:
+        fallback_encodings = ("utf-8-sig", "mac_roman", "cp1252", "latin1")
+
+        for encoding in fallback_encodings:
+            try:
+                df = pd.read_csv(csv_path, encoding=encoding)
+            except UnicodeDecodeError:
+                continue
+
+            backup_path = f"{csv_path}.encoding.bak"
+            backup_idx = 1
+            while os.path.exists(backup_path):
+                backup_idx += 1
+                backup_path = f"{csv_path}.encoding.bak{backup_idx}"
+            shutil.copy2(csv_path, backup_path)
+
+            df.to_csv(csv_path, index=False, encoding="utf-8")
+            print(
+                f"[EPMC] Converted annotation CSV from {encoding} to UTF-8: {csv_path}"
+            )
+            print(f"[EPMC] Original CSV backup: {backup_path}")
+            return df
+
+        raise UnicodeDecodeError(
+            utf8_error.encoding,
+            utf8_error.object,
+            utf8_error.start,
+            utf8_error.end,
+            (
+                f"{utf8_error.reason}. Could not read '{csv_path}' as UTF-8 or "
+                f"fallback encodings: {', '.join(fallback_encodings)}"
+            ),
+        ) from utf8_error
 
 
 # ============================================================================
@@ -376,7 +419,7 @@ def get_annotation_summary_columns(df: pd.DataFrame, args) -> List[str]:
         return [args.annotation_column] if args.annotation_column in df.columns else []
 
     if args.epmc_query_csv:
-        rules = pd.read_csv(args.epmc_query_csv)
+        rules = read_epmc_query_csv(args.epmc_query_csv)
         if "annotation_column" not in rules.columns:
             return []
         ordered = []
@@ -457,7 +500,7 @@ def run_multi_epmc_annotations(df: pd.DataFrame,
                                debug_query: bool) -> pd.DataFrame:
 
     print(f"[EPMC] Loading annotation CSV: {csv_path}")
-    rules = pd.read_csv(csv_path)
+    rules = read_epmc_query_csv(csv_path, verbose=verbose)
 
     required = {"annotation_column", "annotation", "section", "string_OR", "string_AND"}
     if not required.issubset(rules.columns):
@@ -588,6 +631,8 @@ def main():
     args.fields = normalise_fields_arg(args.fields)
     if args.epmc or args.epmc_query_csv:
         args.fields = ensure_required_fields(args.fields, ["xref_DOI"])
+    if args.epmc_query_csv:
+        read_epmc_query_csv(args.epmc_query_csv, verbose=args.verbose)
 
     # -----------------------------
     # Build EMDB query
