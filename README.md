@@ -18,8 +18,8 @@ Typical use cases include:
 
 - Query EMDB using **Solr-style filters**
 - Choose EMDB source:
-  - Python client (`--emdb_source client`, default)
-  - direct EMDB HTTP API (`--emdb_source http`)
+  - direct EMDB HTTP API (`--emdb_source http`, default)
+  - Python client (`--emdb_source client`)
 - Retrieve EMDB entries as DataFrame and CSV
 
 - Query Europe PMC for entry labeling:
@@ -27,7 +27,8 @@ Typical use cases include:
   - complex multi-rule CSV definitions (`--epmc_query_csv`)
 
 - Caching of Europe PMC results for fast requery
-- Summary report generation
+- Optional citation, h-index, and Europe PMC full-text coverage reporting
+- Summary report generation with the command used and an EMDB website search URL
 ---
 
 ## Requirements
@@ -51,7 +52,7 @@ pip install emdb pandas requests tqdm
 ### Query EMDB only
 
 ```bash
-./emdb.client.epmc_annotation_search.py \
+./emdb.client.epmc_annotation.py \
   --method '*' \
   --status REL \
   --fields emdb_id,xref_DOI \
@@ -67,7 +68,7 @@ emdb_results.csv
 ### Query EMDB using direct HTTP endpoint (without `EMDB().csv_search()`)
 
 ```bash
-./emdb.client.epmc_annotation_search.py \
+./emdb.client.epmc_annotation.py \
   --emdb_source http \
   --method '*' \
   --status REL \
@@ -86,11 +87,11 @@ Optional:
 Annotate entries where publications mention a term in a specific section:
 
 ```bash
-./emdb.client.epmc_annotation_search.py \
+./emdb.client.epmc_annotation.py \
   --epmc \
   --section METHODS \
   --string "cryoFIB,focused ion beam" \
-  --annotation_column CryoFIB \
+  --annotation_group CryoFIB \
   --output emdb_cryoFIB \
   --summary
 ```
@@ -100,7 +101,7 @@ Annotate entries where publications mention a term in a specific section:
 ## Query EMDB and label entries by Multi-Rule Annotation via CSV (Recommended)
 
 ```bash
-./emdb.client.epmc_annotation_search.py \
+./emdb.client.epmc_annotation.py \
   --epmc_query_csv search_table/epmc_annotation_search.csv \
   --full_cache \
   --fields emdb_id,current_status,structure_determination_method,institution_name,country_name,xref_DOI
@@ -118,11 +119,13 @@ Rule semantics:
 Example CSV:
 
 ```example.csv
-annotation_column,annotation,section,string_OR,string_AND
+annotation_group,annotation,section,string_OR,string_AND
 FIB-SEM,Yes,METHODS,SUPPL,"FIB-SEM,cryoFIB",""
 Facility,eBIC,METHODS,SUPPL,ACK_FUND,"electron Bio-Imaging Centre,eBIC","Diamond"
 Software,modelangelo,METHODS,”modelAngelo, model angelo”
 ```
+
+Legacy CSV files using `annotation_column` are still accepted and are treated as `annotation_group`.
 
 These two rows will generate two independent EPMC search queries, returning DOI's for entry matching and annotation:
 
@@ -137,6 +140,13 @@ Note the sections of a publication that are searched (i.e. METHODS, SUPPL, FUND_
 
 - `<basename>.csv`
 - `<basename>_summary.txt` (if `--summary` is used)
+- `<basename>_summary_counts.csv` (if `--summary` is used)
+
+Optional output columns and summary-count fields:
+
+- `--citations` adds `citedByCount`
+- `--h-index` adds `hIndex` to summary counts
+- `--coverage` adds `epmcFulltextAvailable` to the main CSV and Europe PMC full-text coverage counts to the summary outputs
 
 ---
 
